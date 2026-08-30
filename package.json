@@ -1,0 +1,16 @@
+{
+  "name": "jobpilot-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JobPilot AI - your personal AI job-search copilot: Find -> Filter -> Match -> Tailor CV -> Apply -> Track -> Improve",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"pnpm --dir apps/api dev\" \"pnpm --dir apps/web dev\"",
+    "build": "pnpm --dir apps/api typecheck && pnpm --dir apps/web build",
+    "typecheck": "pnpm --dir apps/api typecheck && pnpm --dir apps/web typecheck",
+    "start": "pnpm --dir apps/api start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

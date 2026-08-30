@@ -1,0 +1,56 @@
+# JobPilot AI + ngrok — dockerized deployment
+#
+#   docker compose up -d --build
+#
+# - app:   JobPilot AI (web UI + API) on http://localhost:4000
+# - ngrok: public tunnel → app:4000 (URL printed in logs / at
+#          http://localhost:4040 web inspector)
+#
+# Auth token & optional secrets come from the .env file next to this
+# file (see .env.example). NGROK_AUTHTOKEN is required.
+
+name: jobpilot-ai
+
+services:
+  app:
+    build: .
+    image: jobpilot-ai:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      # Optional: point these at your Supabase project / DeepSeek API.
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-pro}
+      # Optional paid job-source keys (Adzuna, Jooble, Indeed, Apify)
+      ADZUNA_APP_ID: ${ADZUNA_APP_ID:-}
+      ADZUNA_APP_KEY: ${ADZUNA_APP_KEY:-}
+      JOOBLE_API_KEY: ${JOOBLE_API_KEY:-}
+      INDEED_CLIENT_ID: ${INDEED_CLIENT_ID:-}
+      INDEED_CLIENT_SECRET: ${INDEED_CLIENT_SECRET:-}
+      INDEED_ACCESS_TOKEN: ${INDEED_ACCESS_TOKEN:-}
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
+    ports:
+      - "4000:4000"   # local access; remove if you only want the tunnel
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:4000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Set NGROK_AUTHTOKEN in .env (see .env.example)}
+    command: ["http", "app:4000", "--log=stdout"]
+    ports:
+      - "4040:4040"   # ngrok web inspector — shows the public URL
