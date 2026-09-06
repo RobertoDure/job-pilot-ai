@@ -1,103 +1,409 @@
 # JobPilot AI
 
-Your personal AI job-search copilot. It turns "I want a Java Developer job in Dublin, EUR 70k+, hybrid"
-into an automated pipeline:
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-v22%2B-brightgreen.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-v5.7-blue.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-v18.3-61dafb.svg)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-v5.4-646cff.svg)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v3.4-38bdf8.svg)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20Postgres-3ecf8e.svg)](https://supabase.com/)
+[![DeepSeek AI](https://img.shields.io/badge/AI-DeepSeek--v4--pro-purple.svg)](https://deepseek.com/)
 
-    Find -> Filter -> Match -> Tailor CV -> Apply -> Track -> Improve
+**JobPilot AI** is an intelligent, full-stack job search copilot and automation engine built as a modern TypeScript monorepo. It transforms the job hunting process—from initial search to career improvement—into a streamlined, automated, and explainable pipeline:
 
-A full-stack SaaS MVP with Supabase (authentication + user storage + PostgreSQL) and DeepSeek v4 pro
-for generative AI, plus a deterministic, explainable job-matching engine.
+$$\text{Find} \longrightarrow \text{Filter} \longrightarrow \text{Match} \longrightarrow \text{Tailor CV} \longrightarrow \text{Apply} \longrightarrow \text{Track} \longrightarrow \text{Improve}$$
 
----
-
-# Run Ngrok
-
-### 1) start the app
-pnpm dev  
-
-### 2) manually open the tunnel whenever you want it public
-~/.local/bin/ngrok http 4000 
-
-## What it does
-
-- Accounts and auth: email/password sign-up and sign-in via Supabase Auth, with per-user data isolation.
-- CV to career profile: upload a CV (PDF, DOCX, TXT, pasted text, or the built-in sample) and the system
-  extracts a structured profile (skills, experience, education, salary, location, and more).
-- Live jobs, not mock data: submitting a CV triggers a fetch of real postings from public job-board APIs
-  (Remotive, Arbeitnow, Jobicy, The Muse, PublicJobs.ie, and optionally Adzuna, Jooble, Indeed via its
-  GraphQL API, and Indeed via the Apify misceres/indeed-scraper). No seed/mock job rows are used.
-- Explainable job-match score: every job gets a 0-100 score broken down by category, plus the exact
-  matched and missing skills.
-- "Should I apply?": application probability with interview potential, skills/experience/education/location
-  fit, and a competition estimate. Every job is ranked APPLY / CONSIDER / SKIP.
-- AI CV tailoring and cover letters: DeepSeek writes a truthful tailored summary and cover letter from your
-  existing experience (nothing is invented); a deterministic engine handles the reordering.
-- Application command center: a kanban pipeline (Recommended -> Applied -> Interview -> Offer / Rejected /
-  No response), persisted per user.
-- Career intelligence: response rate by role/industry, skill-gap suggestions, and DeepSeek recommendations.
-- AI interview simulator: role-specific questions plus DeepSeek-generated preparation notes.
-- Freemium pricing: Free, Job Seeker, JobPilot Pro, JobPilot Max.
+Unlike traditional platforms relying on static or mock job rows, JobPilot AI ingests **live job postings** from multiple public APIs and job aggregators on-demand. It parses candidate CVs, generates structured profiles, performs explainable deterministic matching, offers AI-powered CV tailoring and cover letter generation, provides interview preparation, and delivers data-driven career intelligence.
 
 ---
 
-## Tech stack
-
-- Frontend: React + Vite + Tailwind CSS + Supabase JS client.
-- Backend: Node.js + TypeScript + Express.
-- Auth and database: Supabase (Auth + Postgres + Row Level Security).
-- AI: DeepSeek deepseek-v4-pro via the OpenAI-compatible chat-completions API, with deterministic fallbacks.
+## Table of Contents
+1. [Key Features & User Workflows](#key-features--user-workflows)
+2. [Project Flow](#project-flow)
+3. [System Architecture & Tech Stack](#system-architecture--tech-stack)
+4. [Matching & Scoring Engine](#matching--scoring-engine)
+5. [Live Job Ingestion Providers](#live-job-ingestion-providers)
+6. [Database Schema & Security](#database-schema--security)
+7. [API Reference](#api-reference)
+8. [Installation & Setup Guide](#installation--setup-guide)
+9. [Environment Variables](#environment-variables)
+10. [Monorepo Scripts](#monorepo-scripts)
+11. [Subscription & Freemium Tiers](#subscription--freemium-tiers)
 
 ---
 
-## Quick start
+## Key Features & User Workflows
 
-Prerequisites: Node 22+, pnpm, a Supabase project.
+### 📄 CV Parsing & Profile Extraction
+- **Multi-format Support**: Upload CVs in PDF (`pdf-parse`), DOCX (`adm-zip` XML extraction), plain text, or paste raw text. Built-in sample CV option available for instant testing.
+- **Structured Profile Generation**: Extracts candidate contact details, headline, location, salary expectations, remote preferences, seniority level, education background, work history, and skills (categorized with years of experience and level).
 
-1. Install dependencies:
+### 🎯 Live Job Matching & Explainable Scoring
+- **Real Postings**: Fetch live jobs matching candidate role tokens and skill profiles directly from official job board APIs.
+- **Deterministic 0-100 Scoring**: Transparent sub-scores across 6 distinct categories (Skills, Experience, Location, Salary, Education, Seniority).
+- **Application Probability & Verdicts**: Categorizes matched postings into actionable verdicts: `APPLY` (Score $\ge 80$), `CONSIDER` (Score $60-79$), or `SKIP` (Score $< 60$), accompanied by skill match breakdowns and estimated applicant competition.
 
-       pnpm install
+### ✍️ Truthful AI CV Tailoring & Cover Letters
+- **Truth-Preserving AI**: Powered by **DeepSeek v4 pro** (`deepseek-v4-pro`) via OpenAI-compatible chat completion endpoints. The AI is constrained to strict factual guidelines (*never invents credentials, skills, or experience*).
+- **Deterministic Fallbacks**: Fully operational even if the LLM provider endpoint is unreachable or unconfigured.
+- **Dynamic Reordering**: Highlights and reorders existing experience points and skills to maximize alignment with target job requirements.
+- **Cover Letter Generator**: Drafts role-tailored cover letters highlighting relevant achievements.
 
-2. Configure environment. Create apps/api/.env:
+### 📊 Application Command Center (Kanban Pipeline)
+- **Interactive Kanban Board**: Drag-and-drop or status-toggle tracked jobs across pipeline stages (`Recommended`, `Applied`, `Interview`, `Offer`, `Rejected`, `No Response`).
+- **Self-Contained Snapshots**: Tracked applications store full `job_data` JSON snapshots in PostgreSQL, ensuring data persistence even if job catalogs are rebuilt after uploading a new CV.
 
-       SUPABASE_URL=https://<project-ref>.supabase.co
-       SUPABASE_ANON_KEY=sb_publishable_...
-       DEEPSEEK_API_KEY=sk-...
-       DEEPSEEK_BASE_URL=https://api.deepseek.com
-       DEEPSEEK_MODEL=deepseek-v4-pro
+### 💡 Career Intelligence & Interview Coach
+- **Career Insights**: Aggregates response rates, skill gap analysis (identifying missing high-value skills across postings), target roles, and market alignment.
+- **AI Interview Simulator**: Generates role-specific behavior and technical interview questions, sample answers, and strategic preparation tips.
 
-       # Optional (recommended for production): lets job ingestion bypass RLS.
-       SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
+---
 
-       # Optional: add aggregator listings (including LinkedIn-sourced posts).
-       ADZUNA_APP_ID=...
-       ADZUNA_APP_KEY=...
-       JOOBLE_API_KEY=...
+## Project Flow
 
-       # Optional: add board-native Indeed postings via Indeed's GraphQL API.
-       # Requires an Indeed partner app with the job-retrieval-service entitlement.
-       INDEED_CLIENT_ID=...
-       INDEED_CLIENT_SECRET=...
-       # INDEED_ACCESS_TOKEN=...   # optional: skip OAuth and use a pre-issued token
+The end-to-end data and user interaction flow moves seamlessly from authentication to continuous career improvement:
 
-       # Optional: add board-native Indeed postings via the Apify misceres/indeed-scraper
-       # actor (works with a plain Apify API token; up to 50 results per CV submission).
-       APIFY_API_TOKEN=...
+```mermaid
+flowchart TD
+    %% Custom Styling
+    classDef auth fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
+    classDef parsing fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef ingest fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef match fill:#701a75,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef tailor fill:#7c2d12,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef kanban fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#fff
+    classDef coach fill:#4c1d95,stroke:#a78bfa,stroke-width:2px,color:#fff
 
-   The frontend reads the same publishable key from apps/web/src/supabase.ts (or the VITE_SUPABASE_URL
-   and VITE_SUPABASE_ANON_KEY env vars). The publishable key is client-safe.
+    subgraph Step1 ["1. Authentication & Onboarding"]
+        A[User Signs Up / Logs In]:::auth --> B[Supabase Auth Issues JWT]:::auth
+        B --> C[User Navigates to Onboarding]:::auth
+    end
 
-3. Create the database schema once. Paste supabase/schema.sql into the Supabase SQL Editor, or apply it
-   via the Management API (see below). It creates the profiles, jobs, and applications tables and
-   enables Row Level Security. Jobs are stored per user and populated at runtime from live providers.
-   Re-applying the file on an existing database also runs the idempotent migration to the per-user
-   job model.
+    subgraph Step2 ["2. CV Upload & Parsing"]
+        C --> D{Upload Format?}:::parsing
+        D -->|PDF / DOCX / Text| E[Parse via pdf-parse / adm-zip]:::parsing
+        D -->|Sample CV| F[Load Built-In Sample CV]:::parsing
+        E --> G[Extract Candidate Profile]:::parsing
+        F --> G
+        G --> H[(Persist to public.profiles)]:::parsing
+    end
 
-4. Build and run:
+    subgraph Step3 ["3. Live Job Ingestion Engine"]
+        G --> I[Extract Target Roles & Skill Tokens]:::ingest
+        I --> J[Fetch Live Jobs from APIs]:::ingest
+        J --> K[Remotive / Arbeitnow / Jobicy / The Muse / PublicJobs / Adzuna / Jooble / Indeed]:::ingest
+        K --> L[Normalize & Deduplicate Listings]:::ingest
+        L --> M[(Store Per-User Jobs in public.jobs)]:::ingest
+    end
 
-       pnpm run build
-       pnpm start
+    subgraph Step4 ["4. Deterministic Match Engine"]
+        M --> N[Evaluate 6 Match Vectors]:::match
+        N --> O["Skills 35% - Exp 25% - Location 15% - Salary 10% - Edu 8% - Seniority 7%"]:::match
+        O --> P["Compute Overall Score (0-100) & Verdict"]:::match
+        P --> Q{Verdict?}:::match
+        Q -->|Score >= 80| R1[APPLY]:::match
+        Q -->|Score 60-79| R2[CONSIDER]:::match
+        Q -->|Score < 60| R3[SKIP]:::match
+    end
 
-   Then open http://localhost:4000, create an account, and click "Use sample CV".
+    subgraph Step5 ["5. AI CV Tailoring & Application Prep"]
+        R1 & R2 --> S[Select Job to Apply]:::tailor
+        S --> T[Invoke DeepSeek v4 pro Agent]:::tailor
+        T --> U[Truth-Preserving Tailored Summary & Cover Letter]:::tailor
+        T --> V[Dynamic Experience & Skill Reordering]:::tailor
+    end
+
+    subgraph Step6 ["6. Command Center & Tracking"]
+        U & V --> W[Track Application in Kanban Board]:::kanban
+        W --> X[(Persist Snapshot to public.applications)]:::kanban
+        X --> Y[Pipeline Stages: Recommended -> Applied -> Interview -> Offer / Rejected]:::kanban
+    end
+
+    subgraph Step7 ["7. Career Intelligence & Interview Coach"]
+        Y --> Z1[Generate AI Interview Prep & Questions]:::coach
+        Y --> Z2[Analyze Market Skill Gaps & Response Rates]:::coach
+        Z2 -->|Iterate CV & Skills| C
+    end
+```
+
+---
+
+## System Architecture & Tech Stack
+
+```mermaid
+graph TD
+    subgraph Frontend ["Client Layer (apps/web)"]
+        UI[React 18 + Vite App]
+        Router[React Router DOM]
+        State[AppContext + Supabase Client]
+    end
+
+    subgraph Backend ["Server Layer (apps/api)"]
+        Express[Node.js / Express API Server]
+        AuthMW[Supabase JWT Auth Middleware]
+        Parser[CV Parser Engine - PDF/DOCX]
+        Matcher[Deterministic Match Engine]
+        Ingest[Job Ingestion & Normalizer]
+        AI[DeepSeek AI Coach Agent]
+    end
+
+    subgraph Storage ["Data & External Services"]
+        Supabase[(Supabase Postgres + RLS)]
+        DeepSeek[DeepSeek API v4 pro]
+        JobAPIs[Live Job APIs: Remotive, Arbeitnow, Jobicy, The Muse, PublicJobs, Adzuna, Jooble, Indeed, Apify]
+    end
+
+    UI -->|HTTP / REST| Express
+    UI -->|Auth / Session| Supabase
+    Express --> AuthMW
+    AuthMW --> Supabase
+    Express --> Parser
+    Express --> Matcher
+    Express --> Ingest
+    Express --> AI
+    Ingest --> JobAPIs
+    AI -->|OpenAI-Compatible Chat API| DeepSeek
+    Express -->|Persist Profiles, Jobs, Applications| Supabase
+```
+
+### Core Technologies
+
+| Domain | Technology / Library | Purpose |
+| :--- | :--- | :--- |
+| **Monorepo** | `pnpm` Workspaces, `concurrently` | Workspace management and script execution |
+| **Frontend Framework** | React 18, TypeScript 5.7 | User interface rendering and client state |
+| **Build Tool & Bundler** | Vite 5.4, PostCSS, Tailwind CSS 3.4 | Development server, bundling, and responsive styling |
+| **Backend Runtime** | Node.js (v22+), Express 4.21, `tsx` | REST API routes, middleware, server logic |
+| **Document Processing** | `pdf-parse` (1.1.1), `adm-zip` (0.5.16) | Native PDF and DOCX text extraction |
+| **Authentication & DB** | Supabase JS Client (`@supabase/supabase-js` v2.45) | Auth session management, PostgreSQL database, Row Level Security |
+| **AI / LLM Integration** | DeepSeek API (`deepseek-v4-pro`) | Generative CV summaries, cover letters, and interview coaching |
+
+---
+
+## Matching & Scoring Engine
+
+The matching engine computes a comprehensive **Overall Match Score** ($0-100$) using weighted sub-scores across key career vectors:
+
+$$\text{Overall Score} = (S_{\text{skills}} \times 0.35) + (S_{\text{exp}} \times 0.25) + (S_{\text{loc}} \times 0.15) + (S_{\text{sal}} \times 0.10) + (S_{\text{edu}} \times 0.08) + (S_{\text{sen}} \times 0.07)$$
+
+```mermaid
+pie title Match Score Weight Distribution
+    "Skills Match (35%)" : 35
+    "Experience & Role Overlap (25%)" : 25
+    "Location & Remote Fit (15%)" : 15
+    "Salary Alignment (10%)" : 10
+    "Education Level (8%)" : 8
+    "Seniority Level (7%)" : 7
+```
+
+### Scoring Components Breakdown
+
+1. **Skills Match ($35\%$)**: Evaluates overlap between candidate skill set and required/nice-to-have job skills detected via keyword normalization.
+2. **Experience & Role Overlap ($25\%$)**: Measures candidate total years of experience against requested job years, combined with tokenized role title overlap.
+3. **Location & Remote Fit ($15\%$)**: Factors in exact city match, country match, and remote/hybrid policy preferences.
+4. **Salary Alignment ($10\%$)**: Compares candidate minimum salary expectation against job salary max limits (disclosed or estimated).
+5. **Education Level ($8\%$)**: Compares required degree rank (Bachelors, Masters, PhD) against candidate qualifications.
+6. **Seniority Level ($7\%$)**: Ranks candidate seniority (Intern, Junior, Mid, Senior, Lead, Staff, Principal) relative to the job's requirements.
+
+---
+
+## Live Job Ingestion Providers
+
+JobPilot AI aggregates real-time job postings across multiple native job board APIs and aggregators:
+
+| Provider | Endpoint / Protocol | Auth Requirements | Features |
+| :--- | :--- | :--- | :--- |
+| **Remotive** | `https://remotive.com/api/remote-jobs` | Public | Global remote developer & tech roles |
+| **Arbeitnow** | `https://www.arbeitnow.com/api/v1/jobs` | Public | Tech postings based in Germany / Europe |
+| **Jobicy** | `https://jobicy.com/api/v2/remote-jobs` | Public | Remote tech and software engineering roles |
+| **The Muse** | `https://www.themuse.com/api/v1/jobs` | Public | US & international career listings |
+| **PublicJobs.ie**| HTML Scraper (`https://www.publicjobs.ie`) | Public | Irish public sector postings |
+| **Adzuna** | `https://api.adzuna.com/v1/api/jobs` | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | International job aggregation (includes LinkedIn cross-posts) |
+| **Jooble** | `https://jooble.org/api/` | `JOOBLE_API_KEY` | Worldwide job search engine aggregator |
+| **Indeed (GraphQL)**| `https://apis.indeed.com/graphql` | OAuth Client Credentials | Native Indeed postings via official GraphQL API |
+| **Apify Indeed** | `Apify Actor (misceres/indeed-scraper)` | `APIFY_API_TOKEN` | Scraped Indeed listings fallback |
+
+---
+
+## Database Schema & Security
+
+The PostgreSQL database is hosted on Supabase and secured via strict **Row Level Security (RLS)** policies. All operational data is isolated per authenticated user (`auth.uid() = user_id`).
+
+```mermaid
+erdiagram
+    AUTH_USERS ||--o{ PROFILES : owns
+    AUTH_USERS ||--o{ JOBS : has
+    AUTH_USERS ||--o{ APPLICATIONS : tracks
+
+    PROFILES {
+        uuid user_id PK
+        jsonb profile
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    JOBS {
+        text id PK
+        uuid user_id PK
+        jsonb data
+        timestamptz created_at
+    }
+
+    APPLICATIONS {
+        text id PK
+        uuid user_id FK
+        text job_id
+        text status
+        integer match_score
+        text notes
+        jsonb job_data
+        timestamptz created_at
+        timestamptz updated_at
+    }
+```
+
+### Table Specifications
+
+- **`public.profiles`**: Stores extracted user CV data, candidate preferences, skills, and work experience as a JSONB object (`user_id` PK).
+- **`public.jobs`**: Per-user job catalog (`(user_id, id)` composite PK). Rebuilt dynamically whenever a new CV is uploaded.
+- **`public.applications`**: Tracked applications in the Kanban pipeline (`id` PK). Contains a self-contained `job_data` JSONB snapshot so applications persist independently of job catalog updates.
+
+---
+
+## API Reference
+
+All routes (except `/health`) require a valid Supabase JWT sent in the `Authorization: Bearer <token>` header.
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Unauthenticated server health check |
+| `GET` | `/profile` | Retrieve candidate profile and current job market summary |
+| `POST` | `/profile` | Manually update candidate profile object |
+| `POST` | `/cv/analyze` | Upload CV text, PDF, or DOCX base64; parses profile & rebuilds jobs |
+| `GET` | `/jobs` | Retrieve user's ingested live job list |
+| `GET` | `/jobs/:id` | Retrieve single job by ID |
+| `GET` | `/matches` | Retrieve all job matches sorted by match score |
+| `GET` | `/matches/:jobId` | Retrieve match breakdown and sub-scores for a specific job |
+| `GET` | `/digest` | Get daily match digest, top recommendations, and pipeline stats |
+| `GET` | `/applications` | List all tracked applications |
+| `POST` | `/applications` | Track a new job application (`jobId`, `status`) |
+| `PATCH` | `/applications/:id` | Update application status or notes |
+| `DELETE`| `/applications/:id` | Remove application from tracking pipeline |
+| `GET` | `/insights` | Retrieve career intelligence, response rates, and skill gaps |
+| `GET` | `/interview/:jobId` | Generate interview preparation questions & sample answers |
+| `POST` | `/prepare/:jobId` | Tailor CV summary, bullet points, and draft cover letter for a job |
+
+---
+
+## Installation & Setup Guide
+
+### Prerequisites
+- **Node.js**: `v22.0.0` or higher
+- **Package Manager**: `pnpm` (`v9+` recommended)
+- **Supabase Account**: A running Supabase project with Postgres & Auth enabled.
+
+### 1. Clone & Install Dependencies
+```bash
+git clone https://github.com/your-org/job-pilot-ai.git
+cd job-pilot-ai
+pnpm install
+```
+
+### 2. Configure Environment Variables
+Create an `.env` file in `apps/api/.env` (and set client env variables in `apps/web` or `apps/web/src/supabase.ts`):
+
+```bash
+# apps/api/.env
+PORT=4000
+SUPABASE_URL=https://<your-project-ref>.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_...
+# Optional: Allows backend ingestion to write per-user jobs directly
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
+
+# AI LLM Provider Configuration
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
+
+# Optional External Job Aggregator Keys
+ADZUNA_APP_ID=...
+ADZUNA_APP_KEY=...
+JOOBLE_API_KEY=...
+INDEED_CLIENT_ID=...
+INDEED_CLIENT_SECRET=...
+APIFY_API_TOKEN=...
+```
+
+### 3. Initialize Database Schema
+Execute the database setup script located at `supabase/schema.sql` in the **Supabase SQL Editor**. This creates the required `profiles`, `jobs`, and `applications` tables, indexes, and RLS security policies.
+
+### 4. Run Development Server
+Start both backend API (`apps/api`) and frontend Vite server (`apps/web`) concurrently:
+```bash
+pnpm dev
+```
+- **Web App**: `http://localhost:5173`
+- **API Server**: `http://localhost:4000`
+
+---
+
+## Environment Variables
+
+| Variable | Scope | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `PORT` | API | No | Express server port (default: `4000`) |
+| `SUPABASE_URL` | API / Web | **Yes** | Supabase project URL |
+| `SUPABASE_ANON_KEY` | API / Web | **Yes** | Supabase publishable/anon API key |
+| `SUPABASE_SERVICE_ROLE_KEY` | API | No | Supabase service role secret (bypasses RLS for ingestion) |
+| `DEEPSEEK_API_KEY` | API | **Yes** | DeepSeek API key for AI generation |
+| `DEEPSEEK_BASE_URL` | API | No | DeepSeek API base endpoint (default: `https://api.deepseek.com`) |
+| `DEEPSEEK_MODEL` | API | No | Model ID (default: `deepseek-v4-pro`) |
+| `ADZUNA_APP_ID` | API | No | Adzuna Job API App ID |
+| `ADZUNA_APP_KEY` | API | No | Adzuna Job API Key |
+| `JOOBLE_API_KEY` | API | No | Jooble API Key |
+| `INDEED_CLIENT_ID` | API | No | Indeed GraphQL Partner App Client ID |
+| `INDEED_CLIENT_SECRET` | API | No | Indeed GraphQL Partner App Secret |
+| `APIFY_API_TOKEN` | API | No | Apify API token for Indeed scraper actor |
+
+---
+
+## Monorepo Scripts
+
+Command execution from the workspace root:
+
+```bash
+# Run API and Web apps concurrently in watch mode
+pnpm dev
+
+# Typecheck and build all workspace applications
+pnpm build
+
+# Perform TypeScript type-checking across all packages
+pnpm typecheck
+
+# Start the built production API server
+pnpm start
+```
+
+---
+
+## Subscription & Freemium Tiers
+
+JobPilot AI includes built-in feature gating logic for freemium SaaS monetization:
+
+| Plan | Price | Monthly CV Uploads | Applications / Mo | Features Included |
+| :--- | :--- | :--- | :--- | :--- |
+| **Free** | €0 / mo | 3 CV uploads | 10 Applications | Basic Job Matching, Basic Search Filters |
+| **Job Seeker** | €12 / mo | 10 CV uploads | 50 Applications | Full Match Breakdown, Unlimited Job Searches |
+| **JobPilot Pro** | €29 / mo | Unlimited | Unlimited | DeepSeek AI Tailoring, Cover Letters, Interview Coach, Skill Gap Analysis |
+| **JobPilot Max**| €59 / mo | Unlimited | Unlimited | Priority Processing, AI Application Auto-Fill, 1-on-1 Career Strategy |
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
 
 Development mode (two processes, hot reload):
 
