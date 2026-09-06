@@ -230,7 +230,7 @@ JobPilot AI aggregates real-time job postings across multiple native job board A
 The PostgreSQL database is hosted on Supabase and secured via strict **Row Level Security (RLS)** policies. All operational data is isolated per authenticated user (`auth.uid() = user_id`).
 
 ```mermaid
-erdiagram
+erDiagram
     AUTH_USERS ||--o{ PROFILES : owns
     AUTH_USERS ||--o{ JOBS : has
     AUTH_USERS ||--o{ APPLICATIONS : tracks
