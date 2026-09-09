@@ -6,6 +6,15 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
+      colors: {
+        brand: {
+          navy: '#16324f',
+          navyDark: '#0e2236',
+          sky: '#4aa3e0',
+          skyDark: '#2f7fb8',
+          skyLight: '#e6f2fa',
+        },
+      },
       boxShadow: {
         card: '0 1px 2px 0 rgba(16,24,40,0.04), 0 1px 3px 0 rgba(16,24,40,0.06)',
       },

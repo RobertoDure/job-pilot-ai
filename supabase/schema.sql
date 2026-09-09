@@ -1,9 +1,14 @@
 -- JobPilot AI schema.
 -- Jobs are ingested from real, public job-board APIs at runtime and stored
 -- PER USER, keyed by (user_id, id). Uploading a new CV deletes the user's old
--- jobs (and their applications, via cascade) and stores fresh ones for the new
--- profile. Apply this file once in the Supabase SQL Editor (or via the
--- Management API).
+-- jobs and stores fresh ones for the new profile.
+--
+-- Applications are decoupled from the job catalog: each row keeps its own
+-- job_data JSON snapshot, so tracked applications survive a CV re-upload and
+-- remain visible in the command center even when the underlying posting is
+-- not fetched again.
+--
+-- Apply this file once in the Supabase SQL Editor (or via the Management API).
 --
 -- This file is idempotent: the CREATE IF NOT EXISTS statements cover fresh
 -- installs and the migration block below upgrades a legacy shared job catalog
@@ -24,6 +29,8 @@ create table if not exists public.jobs (
   primary key (user_id, id)
 );
 
+-- Applications carry a job_data snapshot so they are self-contained and do not
+-- depend on the jobs table staying around after a job-catalog rebuild.
 create table if not exists public.applications (
   id text primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -31,9 +38,9 @@ create table if not exists public.applications (
   status text not null default 'recommended',
   match_score integer not null default 0,
   notes text,
+  job_data jsonb,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint applications_job_fkey foreign key (user_id, job_id) references public.jobs (user_id, id) on delete cascade
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists applications_user_id_idx on public.applications (user_id);
@@ -42,6 +49,10 @@ create index if not exists jobs_user_id_idx on public.jobs (user_id);
 -- ---------------------------------------------------------------------------
 -- Migration: legacy shared job catalog -> per-user jobs (idempotent).
 -- ---------------------------------------------------------------------------
+
+-- 0. Give each application a self-contained job snapshot (newer rows set this
+--    on write; this backfills rows created before the column existed).
+alter table public.applications add column if not exists job_data jsonb;
 
 -- 1. Add user_id if missing, then clear rows that cannot be attributed to a
 --    user (legacy shared/mock rows). Their applications cascade-delete.
@@ -57,8 +68,18 @@ alter table public.applications drop constraint if exists applications_job_id_fk
 alter table public.jobs drop constraint if exists jobs_pkey;
 alter table public.jobs add constraint jobs_pkey primary key (user_id, id);
 
--- 4. Re-attach applications to a user's job row.
-alter table public.applications add constraint applications_job_fkey foreign key (user_id, job_id) references public.jobs (user_id, id) on delete cascade;
+-- 4. Backfill job snapshots from the current job catalog for any applications
+--    that predate the job_data column.
+update public.applications a
+set job_data = j.data
+from public.jobs j
+where a.job_data is null
+  and j.user_id = a.user_id
+  and j.id = a.job_id;
+
+-- Applications intentionally stay decoupled from jobs after this point so a
+-- future CV re-upload (which deletes the old job catalog) does not cascade
+-- into the tracked pipeline.
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
@@ -92,3 +113,4 @@ create policy "applications_own_access" on public.applications
 -- Remove any legacy mock rows from an earlier seed. Real jobs use source-prefixed
 -- ids (remotive-*, arbeitnow-*, jobicy-*, themuse-*, adzuna-*, jooble-*).
 delete from public.jobs where id like 'job-java-%';
+delete from public.applications where job_id like 'job-java-%';
