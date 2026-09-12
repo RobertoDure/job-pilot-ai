@@ -1,0 +1,168 @@
+# ============================================================
+# JobPilot AI — full deploy pipeline
+#
+# Trigger: push to `main`.
+#
+#   1. verify  — install (frozen lockfile), typecheck API + web, build the web bundle
+#   2. publish — build the production Docker image and push it to GHCR
+#
+# The image is a single-process production build (Express serves both the API
+# and the built SPA on port 4000 — see Dockerfile and apps/api/src/index.ts).
+# Pull it anywhere with:
+#   docker pull ghcr.io/<owner>/job-pilot-ai:latest
+#
+# No extra secrets are required — the run authenticates to GHCR with the
+# built-in GITHUB_TOKEN (hence `packages: write` below). Every API key the app
+# understands (SUPABASE_*, DEEPSEEK_*, ADZUNA_*, JOOBLE_*, INDEED_*, APIFY_*)
+# is read at runtime, so it belongs in the deploy target's environment, not in
+# this workflow.
+#
+# Optional: to re-run a pipeline by hand, add
+#   workflow_dispatch:
+# to the `on:` block below.
+# ============================================================
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Never let two deploys race: a newer push cancels an in-flight older run.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  # Keep in sync with the pnpm version pinned in the Dockerfile.
+  PNPM_VERSION: '11.7.0'
+
+permissions:
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------
+  # 1. Verify — cheap gate before anything is published
+  # ----------------------------------------------------------
+  verify:
+    name: Verify (install, typecheck, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Typechecks apps/api and apps/web (tsc --noEmit).
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Typechecks the API again and produces apps/web/dist.
+      - name: Build web bundle
+        run: pnpm build
+
+      - name: Report build output
+        run: |
+          echo "### Web bundle" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          du -sh apps/web/dist >> "$GITHUB_STEP_SUMMARY"
+          ls apps/web/dist >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # ----------------------------------------------------------
+  # 2. Publish — build the production image and push to GHCR
+  # ----------------------------------------------------------
+  publish:
+    name: Build and push image to GHCR
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # metadata-action lowercases the image name, which GHCR requires.
+      - name: Derive image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha,format=long
+            type=semver,pattern={{version}}
+          labels: |
+            org.opencontainers.image.title=JobPilot AI
+            org.opencontainers.image.description=AI job-search copilot — Express API + React SPA in one process
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Warm the layer cache between runs so dependency installs are reused.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      # Values reach the script through env (not inline interpolation) so that
+      # nothing derived from refs or image tags is ever evaluated as shell code.
+      - name: Publish release summary
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          SHA: ${{ github.sha }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          PRIMARY_TAG=$(echo "$TAGS" | head -n 1)
+          {
+            echo "### Image published"
+            echo ""
+            echo "| Field | Value |"
+            echo "| :--- | :--- |"
+            echo "| Digest | \`$DIGEST\` |"
+            echo "| Commit | \`$SHA\` |"
+            echo "| Tags | $(echo "$TAGS" | tr '\n' ' ') |"
+            echo ""
+            echo "Run it with:"
+            echo ""
+            echo '```bash'
+            echo "docker run --rm -p 4000:4000 \\"
+            echo "  -e SUPABASE_URL=... -e SUPABASE_ANON_KEY=... \\"
+            echo "  -e DEEPSEEK_API_KEY=... \\"
+            echo "  $PRIMARY_TAG"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
